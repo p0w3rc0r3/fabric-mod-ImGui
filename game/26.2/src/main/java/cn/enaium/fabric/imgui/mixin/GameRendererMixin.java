@@ -40,7 +40,7 @@ public class GameRendererMixin {
 
     @Inject(method = "render", at = @At("RETURN"))
     private void render(DeltaTracker deltaTracker, boolean renderLevel, CallbackInfo ci) {
-        if (minecraft.gui instanceof final ImGuiRenderable renderable) {
+        if (minecraft.gui.screen() instanceof final ImGuiRenderable renderable) {
             IMGUI.draw(renderable);
         }
     }

@@ -20,18 +20,28 @@ subprojects {
 
     val minecraftVersion = property("minecraft.version")
     version = "$minecraftVersion-${rootProject.version}+imgui.$imguiVersion"
+    val publishing = gradle.startParameter.taskNames.any {
+        it.split(":").any { split -> split.startsWith("publishToMaven") }
+    }
+
+    fun include(dependency: Any) {
+        if (publishing) {
+            return
+        }
+        dependencies.add("include", dependency)
+    }
 
     dependencies {
-        add("include", add("api", "io.github.spair:imgui-java-binding:$imguiVersion")!!)
-        add("include", add("api", "io.github.spair:imgui-java-lwjgl3:$imguiVersion") {
+        include(add("api", "io.github.spair:imgui-java-binding:$imguiVersion")!!)
+        include(add("api", "io.github.spair:imgui-java-lwjgl3:$imguiVersion") {
             exclude(group = "org.lwjgl")
         })
-        add("include", add("api", "io.github.spair:imgui-java-natives-windows:$imguiVersion")!!)
-        add("include", add("api", "io.github.spair:imgui-java-natives-linux:$imguiVersion")!!)
-        add("include", add("api", "io.github.spair:imgui-java-natives-macos:$imguiVersion")!!)
+        include(add("api", "io.github.spair:imgui-java-natives-windows:$imguiVersion")!!)
+        include(add("api", "io.github.spair:imgui-java-natives-linux:$imguiVersion")!!)
+        include(add("api", "io.github.spair:imgui-java-natives-macos:$imguiVersion")!!)
 
         if (VersionNumber.parse(minecraftVersion.toString()) < VersionNumber.parse("1.14")) {
-            add("include", add("api", "com.github.Enaium:ImGui-LWJGL2:323f99019f")!!)
+            include(add("api", "com.github.Enaium:ImGui-LWJGL2:323f99019f")!!)
         }
     }
 }

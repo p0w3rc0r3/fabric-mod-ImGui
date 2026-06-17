@@ -8,8 +8,10 @@ plugins {
 }
 
 afterEvaluate {
+
+    val disableObfuscation = properties.getOrDefault("fabric.loom.disableObfuscation", false).toString().toBoolean()
+
     publishMods {
-        val disableObfuscation = properties.getOrDefault("fabric.loom.disableObfuscation", false).toString().toBoolean()
         val minecraftVersion = properties["minecraft.version"].toString()
         val modern = VersionNumber.parse(minecraftVersion) >= VersionNumber.parse("1.14")
         file = tasks.named<AbstractArchiveTask>(if (disableObfuscation) "jar" else "remapJar").get().archiveFile.get()

@@ -16,17 +16,24 @@
 
 package cn.enaium.fabric.imgui;
 
+import cn.enaium.fabric.imgui.blaze3d.ImGuiImplBlaze3D;
 import cn.enaium.fabric.imgui.mixin.GlDeviceMixin;
 import cn.enaium.fabric.imgui.mixin.GpuDeviceMixin;
 import com.mojang.blaze3d.opengl.*;
 import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.systems.CommandEncoder;
+import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.GpuDeviceBackend;
+import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
+import imgui.ImDrawData;
 import imgui.ImGui;
 import imgui.flag.ImGuiConfigFlags;
 import imgui.gl3.ImGuiImplGl3;
 import imgui.glfw.ImGuiImplGlfw;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.PreferredGraphicsApi;
+import org.jspecify.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11C;
 import org.lwjgl.opengl.GL30;
@@ -34,47 +41,87 @@ import org.lwjgl.opengl.GL30C;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * @author Enaium
  */
 public class DefaultImGui extends ImGuiService {
     public final ImGuiImplGlfw imGuiImplGlfw = new ImGuiImplGlfw();
-    public final ImGuiImplGl3 imGuiImplGl3 = new ImGuiImplGl3();
+    public @Nullable ImGuiImplGl3 imGuiImplGl3;
+    public @Nullable ImGuiImplBlaze3D imGuiImplBlaze3D;
 
     /**
      * @param id mod id
      */
     public DefaultImGui(String id) {
         super(id);
+        if (Minecraft.getInstance().options.preferredGraphicsBackend().get() != PreferredGraphicsApi.VULKAN) {
+            imGuiImplGl3 = new ImGuiImplGl3();
+        } else {
+            imGuiImplBlaze3D = new ImGuiImplBlaze3D();
+        }
     }
 
     @Override
     public void init(final long handle) {
         imGuiImplGlfw.init(handle, true);
-        imGuiImplGl3.init();
+        if (imGuiImplGl3 != null) {
+            imGuiImplGl3.init();
+        }
+        // ImGuiImplBlaze3D is lazily initialized in newFrame()
     }
 
     @Override
     public void draw(ImGuiRenderable renderable) {
         final RenderTarget framebuffer = Minecraft.getInstance().gameRenderer.mainRenderTarget();
-        final GpuDeviceBackend backend = ((GpuDeviceMixin) RenderSystem.getDevice()).getBackend();
-        final DirectStateAccess directStateAccess = ((GlDeviceMixin) backend).getDirectStateAccess();
-        final FrameBufferCache frameBufferCache = ((GlDeviceMixin) backend).getFrameBufferCache();
-        final List<FrameBufferAttachment> colorTextures = Collections.singletonList((GlTexture) framebuffer.getColorTexture());
-        GlStateManager._glBindFramebuffer(GL30C.GL_FRAMEBUFFER, frameBufferCache.getFbo(directStateAccess, colorTextures, null));
-        GL11C.glViewport(0, 0, framebuffer.width, framebuffer.height);
 
-        imGuiImplGl3.newFrame();
-        imGuiImplGlfw.newFrame(); // Handle keyboard and mouse interactions
-        ImGui.newFrame();
+        if (imGuiImplGl3 != null) {
+            // OpenGL path: bind FBO, render ImGui, unbind FBO
+            final GpuDeviceBackend backend = ((GpuDeviceMixin) RenderSystem.getDevice()).getBackend();
+            final DirectStateAccess directStateAccess = ((GlDeviceMixin) backend).getDirectStateAccess();
+            final FrameBufferCache frameBufferCache = ((GlDeviceMixin) backend).getFrameBufferCache();
+            final List<FrameBufferAttachment> colorTextures = Collections.singletonList((GlTexture) framebuffer.getColorTexture());
+            GlStateManager._glBindFramebuffer(GL30C.GL_FRAMEBUFFER, frameBufferCache.getFbo(directStateAccess, colorTextures, null));
+            GL11C.glViewport(0, 0, framebuffer.width, framebuffer.height);
 
-        renderable.render(ImGui.getIO());
+            imGuiImplGl3.newFrame();
+            imGuiImplGlfw.newFrame();
+            ImGui.newFrame();
 
-        ImGui.render();
-        imGuiImplGl3.renderDrawData(ImGui.getDrawData());
+            renderable.render(ImGui.getIO());
 
-        GlStateManager._glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+            ImGui.render();
+            imGuiImplGl3.renderDrawData(ImGui.getDrawData());
+
+            GlStateManager._glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+        } else if (imGuiImplBlaze3D != null) {
+            // Blaze3D path: use CommandEncoder and RenderPass for GPU-agnostic rendering
+            imGuiImplBlaze3D.newFrame();
+            imGuiImplGlfw.newFrame();
+            ImGui.newFrame();
+
+            renderable.render(ImGui.getIO());
+
+            ImGui.render();
+
+            final ImDrawData drawData = ImGui.getDrawData();
+            final GpuDevice device = RenderSystem.getDevice();
+            final CommandEncoder encoder = device.createCommandEncoder();
+
+            // Upload vertex, index, and uniform data before creating the render pass
+            imGuiImplBlaze3D.uploadDrawData(drawData, encoder);
+
+            // Create render pass on the framebuffer color texture and render ImGui
+            try (RenderPass renderPass = encoder.createRenderPass(
+                    () -> "ImGui",
+                    framebuffer.getColorTextureView(),
+                    Optional.empty())) {
+                imGuiImplBlaze3D.renderDrawData(drawData, renderPass);
+            }
+
+            encoder.submit();
+        }
 
         if (ImGui.getIO().hasConfigFlags(ImGuiConfigFlags.ViewportsEnable)) {
             final long pointer = GLFW.glfwGetCurrentContext();
@@ -87,7 +134,12 @@ public class DefaultImGui extends ImGuiService {
 
     @Override
     public void dispose() {
-        imGuiImplGl3.shutdown();
+        if (imGuiImplGl3 != null) {
+            imGuiImplGl3.shutdown();
+        }
+        if (imGuiImplBlaze3D != null) {
+            imGuiImplBlaze3D.dispose();
+        }
         imGuiImplGlfw.shutdown();
         super.dispose();
     }

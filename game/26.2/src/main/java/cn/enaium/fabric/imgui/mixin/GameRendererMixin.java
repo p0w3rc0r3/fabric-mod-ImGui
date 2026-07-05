@@ -17,6 +17,7 @@
 package cn.enaium.fabric.imgui.mixin;
 
 import cn.enaium.fabric.imgui.ImGuiRenderable;
+import imgui.ImGui;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;

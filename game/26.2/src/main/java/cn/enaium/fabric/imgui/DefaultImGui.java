@@ -143,4 +143,10 @@ public class DefaultImGui extends ImGuiService {
         imGuiImplGlfw.shutdown();
         super.dispose();
     }
+
+    public void rebuildFontsTexture() {
+        if (imGuiImplGl3 != null) {
+            imGuiImplGl3.createFontsTexture();
+        }
+    }
 }

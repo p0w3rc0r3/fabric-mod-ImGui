@@ -1,8 +1,10 @@
 allprojects {
     group = "cn.enaium"
-    version = rootProject.property("version").toString()
+    //version = rootProject.property("version").toString()
+    version = "26.2-1.1.0-BekaZid"
 
     repositories {
+        mavenLocal()
         mavenCentral {
             metadataSources {
                 mavenPom()

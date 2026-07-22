@@ -48,9 +48,9 @@ afterEvaluate {
 
     mavenPublishing {
 
-        publishToMavenCentral(automaticRelease = true)
+        //publishToMavenCentral(automaticRelease = true)
 
-        signAllPublications()
+        //signAllPublications()
 
         coordinates(
             groupId = project.group.toString(),

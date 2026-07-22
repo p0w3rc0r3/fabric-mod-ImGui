@@ -7,13 +7,14 @@ plugins {
 fmg {
     common.set(project(":core"))
 }
-
-val imguiVersion = libs.versions.imgui.get()
+val bindingVersion = "1.92.0-BekaZid"
+val imguiVersion = "1.92.0"
 
 subprojects {
     apply(plugin = "mod-publish")
 
     repositories {
+        mavenLocal()
         maven("https://jitpack.io")
     }
 
@@ -32,10 +33,11 @@ subprojects {
     }
 
     dependencies {
-        include(add("api", "io.github.spair:imgui-java-binding:$imguiVersion")!!)
-        include(add("api", "io.github.spair:imgui-java-lwjgl3:$imguiVersion") {
+        include(add("api", "io.github.spair:imgui-java-binding:$bindingVersion")!!)
+        include(add("api", "io.github.spair:imgui-java-lwjgl3:$bindingVersion"){
             exclude(group = "org.lwjgl")
-        })
+        }!!)
+
         include(add("api", "io.github.spair:imgui-java-natives-windows:$imguiVersion")!!)
         include(add("api", "io.github.spair:imgui-java-natives-linux:$imguiVersion")!!)
         include(add("api", "io.github.spair:imgui-java-natives-macos:$imguiVersion")!!)
